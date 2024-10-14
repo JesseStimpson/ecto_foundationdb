@@ -172,7 +172,7 @@ defmodule EctoFoundationDB.Tenant do
   end
 
   def range(_tenant, range) do
-    :erlfdb_tuple.range(range, "foo")
+    :erlfdb_tuple.range(range)
   end
 
   defp handle_open(repo, tenant, options) do
