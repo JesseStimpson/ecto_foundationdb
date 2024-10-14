@@ -78,9 +78,8 @@ defmodule EctoFoundationDB.Layer.Pack do
     namespaced_range(tenant, source, @data_namespace, [])
   end
 
-  def primary_mapper() do
-    # prefix   source    namespace id        get_range
-    {"{V[0]}", "{V[1]}", "{V[2]}", "{V[3]}", "{...}"}
+  def primary_mapper(tenant) do
+    Tenant.primary_mapper(tenant)
   end
 
   @doc """

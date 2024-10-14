@@ -56,24 +56,23 @@ defmodule Ecto.Integration.IndexerTest do
       name = Keyword.get(data, :name)
 
       if not is_nil(name) and String.starts_with?(name, "J") do
-        :erlfdb.add(tx, Tenant.pack(tenant, @count_key), 1)
+        :erlfdb.add(tx, Tenant.pack(tenant, {@count_key}), 1)
 
         # For simplicity, we duplicate the data into the index key
-        :erlfdb.set(tx, Tenant.pack(tenant, @index_key <> data[:id]), Pack.to_fdb_value(data))
+        :erlfdb.set(tx, Tenant.pack(tenant, {@index_key, data[:id]}), Pack.to_fdb_value(data))
       end
     end
 
     @impl true
     def range(_idx, plan, _options) do
       %QueryPlan{constraints: [%QueryPlan.Equal{field: :name, param: "J"}]} = plan
-      start_key = Tenant.pack(plan.tenant, @index_key)
-      {start_key, :erlfdb_key.strinc(start_key)}
+      Tenant.range(plan.tenant, {@index_key})
     end
 
     def get_count(tenant) do
       FoundationDB.transactional(tenant, fn tx ->
         tx
-        |> :erlfdb.get(Tenant.pack(tenant, @count_key))
+        |> :erlfdb.get(Tenant.pack(tenant, {@count_key}))
         |> :erlfdb.wait()
         |> :binary.decode_unsigned(:little)
       end)

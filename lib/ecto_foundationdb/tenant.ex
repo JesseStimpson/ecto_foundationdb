@@ -160,22 +160,49 @@ defmodule EctoFoundationDB.Tenant do
   def delete(db, id, options), do: EctoAdapterStorage.delete_tenant(db, id, options)
 
   def pack(_tenant, tuple) when is_tuple(tuple) do
-    :erlfdb_tuple.pack(tuple)
-  end
-
-  def pack(_tenant, key) when is_binary(key) do
-    key
+    tuple
+    |> add_tuple_head()
+    |> :erlfdb_tuple.pack()
   end
 
   def unpack(_tenant, tuple) do
-    :erlfdb_tuple.unpack(tuple)
+    tuple
+    |> :erlfdb_tuple.unpack()
+    |> delete_tuple_head()
   end
 
-  def range(_tenant, range) do
-    :erlfdb_tuple.range(range)
+  def range(_tenant, tuple) when is_tuple(tuple) do
+    tuple
+    |> add_tuple_head()
+    |> :erlfdb_tuple.range()
+  end
+
+  def primary_mapper(_tenant) do
+    # mapper indexes are offset by the number of elements added by `add_tuple_head`
+    fn offset ->
+      # tuple elements: prefix, source, namespace, id, get_range
+      {"{V[#{offset}]}", "{V[#{offset + 1}]}", "{V[#{offset + 2}]}", "{V[#{offset + 3}]}",
+       "{...}"}
+    end
+    |> add_tuple_head()
   end
 
   defp handle_open(repo, tenant, options) do
     Migrator.up(repo, tenant, options)
+  end
+
+  defp add_tuple_head(tuple, head \\ "foo")
+
+  defp add_tuple_head(tuple, head) when is_tuple(tuple) do
+    :erlang.insert_element(1, tuple, head)
+  end
+
+  defp add_tuple_head(function, head) when is_function(function) do
+    function.(1)
+    |> add_tuple_head(head)
+  end
+
+  defp delete_tuple_head(tuple) do
+    :erlang.delete_element(1, tuple)
   end
 end

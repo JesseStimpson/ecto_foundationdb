@@ -188,7 +188,7 @@ defmodule EctoFoundationDB.Indexer.Default do
     start_key = options[:start_key] || start_key
 
     if Keyword.get(idx[:options], :mapped?, true) do
-      {start_key, end_key, Pack.primary_mapper()}
+      {start_key, end_key, Pack.primary_mapper(plan.tenant)}
     else
       {start_key, end_key}
     end
