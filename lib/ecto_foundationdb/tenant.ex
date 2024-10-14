@@ -180,9 +180,8 @@ defmodule EctoFoundationDB.Tenant do
   def primary_mapper(_tenant) do
     # mapper indexes are offset by the number of elements added by `add_tuple_head`
     fn offset ->
-      # tuple elements: prefix, source, namespace, id, get_range
-      {"{V[#{offset}]}", "{V[#{offset + 1}]}", "{V[#{offset + 2}]}", "{V[#{offset + 3}]}",
-       "{...}"}
+      # tuple elements: (head,) prefix, source, namespace, id, get_range
+      for(i <- offset..(offset + 3), do: "{V[#{i}]}") ++ ["{...}"]
     end
     |> add_tuple_head()
   end
@@ -195,6 +194,11 @@ defmodule EctoFoundationDB.Tenant do
 
   defp add_tuple_head(tuple, head) when is_tuple(tuple) do
     :erlang.insert_element(1, tuple, head)
+  end
+
+  defp add_tuple_head(list, head) when is_list(list) do
+    [head | list]
+    |> :erlang.list_to_tuple()
   end
 
   defp add_tuple_head(function, head) when is_function(function) do
