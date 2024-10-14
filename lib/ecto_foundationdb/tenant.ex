@@ -159,6 +159,22 @@ defmodule EctoFoundationDB.Tenant do
   @spec delete(Database.t(), id(), Options.t()) :: :ok
   def delete(db, id, options), do: EctoAdapterStorage.delete_tenant(db, id, options)
 
+  def pack(_tenant, tuple) when is_tuple(tuple) do
+    :erlfdb_tuple.pack(tuple)
+  end
+
+  def pack(_tenant, key) when is_binary(key) do
+    key
+  end
+
+  def unpack(_tenant, tuple) do
+    :erlfdb_tuple.unpack(tuple)
+  end
+
+  def range(_tenant, range) do
+    :erlfdb_tuple.range(range, "foo")
+  end
+
   defp handle_open(repo, tenant, options) do
     Migrator.up(repo, tenant, options)
   end

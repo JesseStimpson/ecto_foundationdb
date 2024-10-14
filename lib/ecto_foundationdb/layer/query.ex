@@ -64,9 +64,13 @@ defmodule EctoFoundationDB.Layer.Query do
   @doc """
   Executes a query for deleting data.
   """
-  def delete(db_or_tenant, adapter_meta, plan = %QueryPlan{constraints: [%QueryPlan.None{}]}) do
+  def delete(
+        db_or_tenant,
+        adapter_meta,
+        plan = %QueryPlan{tenant: tenant, constraints: [%QueryPlan.None{}]}
+      ) do
     # Special case, very efficient
-    Tx.transactional(db_or_tenant, &Tx.clear_all(&1, adapter_meta, plan.source))
+    Tx.transactional(db_or_tenant, &Tx.clear_all(tenant, &1, adapter_meta, plan.source))
   end
 
   def delete(db_or_tenant, adapter_meta, plan) do
@@ -147,6 +151,7 @@ defmodule EctoFoundationDB.Layer.Query do
     |> unpack_and_filter(plan)
     |> Stream.map(
       &Tx.update_data_object(
+        plan.tenant,
         tx,
         plan.schema,
         pk_field,
@@ -166,7 +171,7 @@ defmodule EctoFoundationDB.Layer.Query do
     |> tx_get_range(plan, Future.new(plan.schema), [])
     |> Future.result()
     |> unpack_and_filter(plan)
-    |> Stream.map(&Tx.delete_data_object(tx, plan.schema, &1, idxs, partial_idxs))
+    |> Stream.map(&Tx.delete_data_object(plan.tenant, tx, plan.schema, &1, idxs, partial_idxs))
     |> Enum.to_list()
     |> length()
   end
@@ -188,21 +193,26 @@ defmodule EctoFoundationDB.Layer.Query do
          plan = %QueryPlan{constraints: [%QueryPlan.None{}], layer_data: layer_data},
          options
        ) do
-    {start_key, end_key} = Pack.primary_range(plan.source)
+    {start_key, end_key} = Pack.primary_range(plan.tenant, plan.source)
     start_key = options[:start_key] || start_key
     %QueryPlan{plan | layer_data: Map.put(layer_data, :range, {start_key, end_key})}
   end
 
   defp make_datakey_range(
-         plan = %QueryPlan{constraints: [%QueryPlan.Equal{param: param}], layer_data: layer_data},
+         plan = %QueryPlan{
+           tenant: tenant,
+           constraints: [%QueryPlan.Equal{param: param}],
+           layer_data: layer_data
+         },
          _options
        ) do
-    fdb_key = Pack.primary_pack(plan.source, param)
+    fdb_key = Pack.primary_pack(tenant, plan.source, param)
     %QueryPlan{plan | layer_data: Map.put(layer_data, :range, {fdb_key, nil})}
   end
 
   defp make_datakey_range(
          plan = %QueryPlan{
+           tenant: tenant,
            constraints: [
              between =
                %QueryPlan.Between{
@@ -220,8 +230,8 @@ defmodule EctoFoundationDB.Layer.Query do
     param_right =
       if between.inclusive_right?, do: :erlfdb_key.strinc(param_right), else: param_right
 
-    start_key = Pack.primary_pack(plan.source, param_left)
-    end_key = Pack.primary_pack(plan.source, param_right)
+    start_key = Pack.primary_pack(tenant, plan.source, param_left)
+    end_key = Pack.primary_pack(tenant, plan.source, param_right)
     start_key = options[:start_key] || start_key
     %QueryPlan{plan | layer_data: Map.put(layer_data, :range, {start_key, end_key})}
   end

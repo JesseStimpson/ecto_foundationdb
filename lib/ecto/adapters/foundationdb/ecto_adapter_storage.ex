@@ -65,7 +65,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterStorage do
     tenant = open_tenant(dbtx, tenant_id, options)
 
     :erlfdb.transactional(tenant, fn tx ->
-      {start_key, end_key} = Pack.adapter_repo_range()
+      {start_key, end_key} = Pack.adapter_repo_range(tenant)
       :erlfdb.clear_range(tx, start_key, end_key)
     end)
 

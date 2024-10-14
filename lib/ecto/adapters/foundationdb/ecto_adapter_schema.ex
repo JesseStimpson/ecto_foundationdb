@@ -39,7 +39,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterSchema do
 
     num_ins =
       IndexInventory.transactional(tenant, adapter_meta, source, fn tx, idxs, partial_idxs ->
-        Tx.insert_all(tx, {schema, source, context}, entries, idxs, partial_idxs, options)
+        Tx.insert_all(tenant, tx, {schema, source, context}, entries, idxs, partial_idxs, options)
       end)
 
     {num_ins, nil}
@@ -80,6 +80,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterSchema do
     res =
       IndexInventory.transactional(tenant, adapter_meta, source, fn tx, idxs, partial_idxs ->
         Tx.update_pks(
+          tenant,
           tx,
           {schema, source, context},
           pk_field,
@@ -115,7 +116,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterSchema do
 
     res =
       IndexInventory.transactional(tenant, adapter_meta, source, fn tx, idxs, partial_idxs ->
-        Tx.delete_pks(tx, {schema, source, context}, [pk], idxs, partial_idxs)
+        Tx.delete_pks(tenant, tx, {schema, source, context}, [pk], idxs, partial_idxs)
       end)
 
     case res do
@@ -142,7 +143,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterSchema do
     pk = Map.get(struct, pk_field)
 
     IndexInventory.transactional(tenant, adapter_meta, source, fn tx, _idxs, _partial_idxs ->
-      future_ref = Tx.watch(tx, {schema, source, context}, {pk_field, pk}, options)
+      future_ref = Tx.watch(tenant, tx, {schema, source, context}, {pk_field, pk}, options)
       Future.new_watch(schema, future_ref, fn _ -> {schema, pk, options} end)
     end)
   end

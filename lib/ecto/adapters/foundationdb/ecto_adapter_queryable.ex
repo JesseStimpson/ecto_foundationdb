@@ -78,7 +78,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
       ) do
     {context, %Ecto.Query{prefix: tenant}} = assert_tenancy!(query, adapter_opts)
 
-    plan = QueryPlan.get(source, schema, context, wheres, [], params)
+    plan = QueryPlan.get(tenant, source, schema, context, wheres, [], params)
     num = Query.delete(tenant, adapter_meta, plan)
 
     {num, []}
@@ -180,7 +180,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
     #   3. Use :erlfdb.get, :erlfdb.get_range
     #   4. Post-get filtering (Remove :not_found, remove index conflicts, )
     #   5. Arrange fields based on the select input
-    plan = QueryPlan.get(source, schema, context, wheres, [], params)
+    plan = QueryPlan.get(tenant, source, schema, context, wheres, [], params)
     Query.all(tenant, adapter_meta, plan)
   end
 
@@ -207,7 +207,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
          },
          params
        ) do
-    plan = QueryPlan.get(source, schema, context, wheres, updates, params)
+    plan = QueryPlan.get(tenant, source, schema, context, wheres, updates, params)
     Query.update(tenant, adapter_meta, plan)
   end
 
@@ -243,7 +243,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
     end
 
     start_fun = fn ->
-      plan = QueryPlan.get(source, schema, context, wheres, [], params)
+      plan = QueryPlan.get(tenant, source, schema, context, wheres, [], params)
 
       %{
         adapter_meta: adapter_meta,

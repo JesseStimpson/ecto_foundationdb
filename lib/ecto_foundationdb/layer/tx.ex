@@ -89,11 +89,11 @@ defmodule EctoFoundationDB.Layer.Tx do
     end
   end
 
-  def insert_all(tx, {schema, source, context}, entries, idxs, partial_idxs, options) do
+  def insert_all(tenant, tx, {schema, source, context}, entries, idxs, partial_idxs, options) do
     entries =
       entries
       |> Enum.map(fn {{pk_field, pk}, data_object} ->
-        key = Pack.primary_pack(source, pk)
+        key = Pack.primary_pack(tenant, source, pk)
 
         data_object = Fields.to_front(data_object, pk_field)
         {key, data_object}
@@ -108,11 +108,11 @@ defmodule EctoFoundationDB.Layer.Tx do
         # We pretend that the data doesn't exist. This speeds up data loading
         # but can result in inconsistent indexes if objects do exist in
         # the database that are being blindly overwritten.
-        acc = Enum.reduce(entries, acc, &TxInsert.set_stage(tx, &1, :not_found, &2))
+        acc = Enum.reduce(entries, acc, &TxInsert.set_stage(tenant, tx, &1, :not_found, &2))
         acc.count
 
       nil ->
-        acc = pipeline(tx, entries, &TxInsert.get_stage/2, acc, &TxInsert.set_stage/4)
+        acc = pipeline(tenant, tx, entries, &TxInsert.get_stage/2, acc, &TxInsert.set_stage/5)
         acc.count
 
       unsupported_conflict_target ->
@@ -130,21 +130,31 @@ defmodule EctoFoundationDB.Layer.Tx do
     end
   end
 
-  def update_pks(tx, {schema, source, context}, pk_field, pks, set_data, idxs, partial_idxs) do
-    keys = for pk <- pks, do: Pack.primary_pack(source, pk)
+  def update_pks(
+        tenant,
+        tx,
+        {schema, source, context},
+        pk_field,
+        pks,
+        set_data,
+        idxs,
+        partial_idxs
+      ) do
+    keys = for pk <- pks, do: Pack.primary_pack(tenant, source, pk)
 
     write_primary = Schema.get_option(context, :write_primary)
 
     get_stage = &:erlfdb.get/2
 
     update_stage = fn
-      _tx, _key, :not_found, acc ->
+      _tenant, _tx, _key, :not_found, acc ->
         acc
 
-      tx, fdb_key, fdb_value, acc ->
+      _tenant, tx, fdb_key, fdb_value, acc ->
         data_object = Pack.from_fdb_value(fdb_value)
 
         update_data_object(
+          tenant,
           tx,
           schema,
           pk_field,
@@ -158,10 +168,11 @@ defmodule EctoFoundationDB.Layer.Tx do
         acc + 1
     end
 
-    pipeline(tx, keys, get_stage, 0, update_stage)
+    pipeline(tenant, tx, keys, get_stage, 0, update_stage)
   end
 
   def update_data_object(
+        tenant,
         tx,
         schema,
         pk_field,
@@ -179,20 +190,21 @@ defmodule EctoFoundationDB.Layer.Tx do
       |> Fields.to_front(pk_field)
 
     if write_primary, do: :erlfdb.set(tx, fdb_key, Pack.to_fdb_value(data_object))
-    Indexer.update(tx, idxs, partial_idxs, schema, {fdb_key, data_object})
+    Indexer.update(tenant, tx, idxs, partial_idxs, schema, {fdb_key, data_object})
   end
 
-  def delete_pks(tx, {schema, source, _context}, pks, idxs, partial_idxs) do
-    keys = for pk <- pks, do: Pack.primary_pack(source, pk)
+  def delete_pks(tenant, tx, {schema, source, _context}, pks, idxs, partial_idxs) do
+    keys = for pk <- pks, do: Pack.primary_pack(tenant, source, pk)
 
     get_stage = &:erlfdb.get/2
 
     clear_stage = fn
-      _tx, _key, :not_found, acc ->
+      _tenant, _tx, _key, :not_found, acc ->
         acc
 
-      tx, fdb_key, fdb_value, acc ->
+      _tenant, tx, fdb_key, fdb_value, acc ->
         delete_data_object(
+          tenant,
           tx,
           schema,
           {fdb_key, Pack.from_fdb_value(fdb_value)},
@@ -203,18 +215,18 @@ defmodule EctoFoundationDB.Layer.Tx do
         acc + 1
     end
 
-    pipeline(tx, keys, get_stage, 0, clear_stage)
+    pipeline(tenant, tx, keys, get_stage, 0, clear_stage)
   end
 
-  def delete_data_object(tx, schema, kv = {fdb_key, _}, idxs, partial_idxs) do
+  def delete_data_object(tenant, tx, schema, kv = {fdb_key, _}, idxs, partial_idxs) do
     :erlfdb.clear(tx, fdb_key)
 
-    Indexer.clear(tx, idxs, partial_idxs, schema, kv)
+    Indexer.clear(tenant, tx, idxs, partial_idxs, schema, kv)
   end
 
-  def clear_all(tx, %{opts: _adapter_opts}, source) do
+  def clear_all(tenant, tx, %{opts: _adapter_opts}, source) do
     # this key prefix will clear datakeys and indexkeys, but not user data or migration data
-    {key_start, key_end} = Pack.adapter_source_range(source)
+    {key_start, key_end} = Pack.adapter_source_range(tenant, source)
 
     # this would be a lot faster if we didn't have to count the keys
     num = count_range(tx, key_start, key_end)
@@ -222,12 +234,12 @@ defmodule EctoFoundationDB.Layer.Tx do
     num
   end
 
-  def watch(tx, {_schema, source, context}, {_pk_field, pk}, _options) do
+  def watch(tenant, tx, {_schema, source, context}, {_pk_field, pk}, _options) do
     if not Schema.get_option(context, :write_primary) do
       raise Unsupported, "Watches on schemas with `write_primary: false` are not supported."
     end
 
-    fut = :erlfdb.watch(tx, Pack.primary_pack(source, pk))
+    fut = :erlfdb.watch(tx, Pack.primary_pack(tenant, source, pk))
     fut
   end
 
@@ -240,6 +252,7 @@ defmodule EctoFoundationDB.Layer.Tx do
   # the first stage induces a list of futures, and the second stage
   # handles those futures as they arrive (using :erlfdb.wait_for_any/1).
 
+  # tenant: Tenant.t()
   # tx: The erlfdb tx
   # input_list: a list of items to be handled by your stages
   # fun_stage_1: a 2-arity function accepting as args (tx, x) where
@@ -250,7 +263,7 @@ defmodule EctoFoundationDB.Layer.Tx do
   # where tx is the same erlfdb tx, x is the corresponding entry in your
   # input_list, result is the result of the future from stage_1, and acc is
   # the accumulator. This function returns the updated acc.
-  defp pipeline(tx, input_list, fun_stage_1, acc, fun_stage_2) do
+  defp pipeline(tenant, tx, input_list, fun_stage_1, acc, fun_stage_2) do
     futures_map =
       input_list
       |> Enum.map(fn x ->
@@ -259,20 +272,20 @@ defmodule EctoFoundationDB.Layer.Tx do
       end)
       |> Enum.into(%{})
 
-    result = fold_futures(tx, futures_map, acc, fun_stage_2)
+    result = fold_futures(tenant, tx, futures_map, acc, fun_stage_2)
 
     result
   end
 
-  defp fold_futures(tx, futures_map, acc, fun) do
-    fold_futures(tx, Map.keys(futures_map), futures_map, acc, fun)
+  defp fold_futures(tenant, tx, futures_map, acc, fun) do
+    fold_futures(tenant, tx, Map.keys(futures_map), futures_map, acc, fun)
   end
 
-  defp fold_futures(_tx, [], _futures_map, acc, _fun) do
+  defp fold_futures(_tenant, _tx, [], _futures_map, acc, _fun) do
     acc
   end
 
-  defp fold_futures(tx, futures, futures_map, acc, fun) do
+  defp fold_futures(tenant, tx, futures, futures_map, acc, fun) do
     fut = :erlfdb.wait_for_any(futures)
 
     case Map.get(futures_map, fut, nil) do
@@ -281,8 +294,8 @@ defmodule EctoFoundationDB.Layer.Tx do
 
       map_entry ->
         futures = futures -- [fut]
-        acc = fun.(tx, map_entry, :erlfdb.get(fut), acc)
-        fold_futures(tx, futures, futures_map, acc, fun)
+        acc = fun.(tenant, tx, map_entry, :erlfdb.get(fut), acc)
+        fold_futures(tenant, tx, futures, futures_map, acc, fun)
     end
   end
 end

@@ -33,7 +33,7 @@ defmodule EctoFoundationDBProgressiveJobTest.TestJob do
   end
 
   @impl true
-  def init(args) do
+  def init(_tenant, args) do
     state = args |> Map.put(:count, 0)
     {:ok, [@claim_key], {"", "\xFF"}, state}
   end
