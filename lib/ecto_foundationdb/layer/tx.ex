@@ -7,30 +7,45 @@ defmodule EctoFoundationDB.Layer.Tx do
   alias EctoFoundationDB.Layer.Pack
   alias EctoFoundationDB.Layer.TxInsert
   alias EctoFoundationDB.Schema
+  alias EctoFoundationDB.Tenant
 
-  @db_or_tenant :__ectofdbtxcontext__
+  @tenant :__ectofdbtxcontext__
   @tx :__ectofdbtx__
 
-  def in_tenant_tx?(), do: in_tx?() and elem(Process.get(@db_or_tenant), 0) == :erlfdb_tenant
+  def in_tenant_tx?() do
+    tenant = Process.get(@tenant)
+    flag = in_tx?() and tenant.__struct__ == Tenant
+    {flag, tenant}
+  end
+
   def in_tx?(), do: not is_nil(Process.get(@tx))
 
-  def safe?(tenant, nil), do: safe?(tenant, false)
+  def safe?(nil) do
+    case in_tenant_tx?() do
+      {true, tenant} ->
+        {true, tenant}
 
-  def safe?(nil, true),
-    do: if(in_tenant_tx?(), do: true, else: {false, :missing_tenant})
+      {false, _} ->
+        {false, :missing_tenant}
+    end
+  end
 
-  def safe?(_tenant, true), do: true
-  def safe?(nil, false), do: {false, :tenant_only}
-  def safe?(_tenant, false), do: {false, :unused_tenant}
+  def safe?(tenant) do
+    if tenant.__struct__ == Tenant do
+      {true, tenant}
+    else
+      {false, :missing_tenant}
+    end
+  end
 
-  def transactional_external(db_or_tenant, fun) do
-    nil = Process.get(@db_or_tenant)
+  def transactional_external(tenant, fun) do
+    nil = Process.get(@tenant)
     nil = Process.get(@tx)
 
     :erlfdb.transactional(
-      db_or_tenant,
+      Tenant.ref(tenant),
       fn tx ->
-        Process.put(@db_or_tenant, db_or_tenant)
+        Process.put(@tenant, tenant)
         Process.put(@tx, tx)
 
         try do
@@ -40,7 +55,7 @@ defmodule EctoFoundationDB.Layer.Tx do
           end
         after
           Process.delete(@tx)
-          Process.delete(@db_or_tenant)
+          Process.delete(@tenant)
         end
       end
     )
@@ -59,18 +74,18 @@ defmodule EctoFoundationDB.Layer.Tx do
   end
 
   def transactional(context, fun) do
-    case Process.get(@db_or_tenant, nil) do
+    case Process.get(@tenant, nil) do
       nil ->
         try do
-          Process.put(@db_or_tenant, context)
+          Process.put(@tenant, context)
 
-          :erlfdb.transactional(context, fn tx ->
+          :erlfdb.transactional(Tenant.ref(context), fn tx ->
             Process.put(@tx, tx)
             fun.(tx)
           end)
         after
           Process.delete(@tx)
-          Process.delete(@db_or_tenant)
+          Process.delete(@tenant)
         end
 
       ^context ->

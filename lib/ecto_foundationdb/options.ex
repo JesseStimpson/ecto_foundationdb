@@ -4,6 +4,7 @@ defmodule EctoFoundationDB.Options do
   @type option() ::
           {:open_db, function()}
           | {:storage_id, String.t()}
+          | {:storage_delimiter, String.t()}
           | {:open_tenant_callback, function()}
           | {:migrator, module()}
           | {:cluster_file, :erlfdb.cluster_filename()}
@@ -20,6 +21,13 @@ defmodule EctoFoundationDB.Options do
 
   def get(options, :storage_id),
     do: Keyword.get(options, :storage_id, "Ecto.Adapters.FoundationDB")
+
+  def get(options, :storage_delimiter),
+    do: Keyword.get(options, :storage_delimiter, "/")
+
+  def get(options, :tenant_type),
+    # @todo
+    do: Keyword.get(options, :tenant_type, :managed)
 
   def get(options, :cluster_file), do: Keyword.get(options, :cluster_file, "")
 

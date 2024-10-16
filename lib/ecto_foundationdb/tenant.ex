@@ -5,16 +5,26 @@ defmodule EctoFoundationDB.Tenant do
   so any application that uses the Ecto FoundationDB Adapter must use this module.
   """
 
-  @type t() :: :erlfdb.tenant()
-  @type id() :: :erlfdb.tenant_name()
-  @type prefix() :: String.t()
+  defstruct [:ref, :meta]
 
   alias Ecto.Adapters.FoundationDB, as: FDB
   alias Ecto.Adapters.FoundationDB.EctoAdapterStorage
 
   alias EctoFoundationDB.Database
+  alias EctoFoundationDB.Exception.Unsupported
+  alias EctoFoundationDB.Layer.Pack
   alias EctoFoundationDB.Migrator
   alias EctoFoundationDB.Options
+  alias EctoFoundationDB.Tenant
+  alias EctoFoundationDB.Tenant.Managed
+  alias EctoFoundationDB.Tenant.Layer
+
+  @type t() :: %Tenant{}
+  @type meta() :: Managed.t() | Layer.t()
+  @type id() :: :erlfdb.tenant_name()
+  @type prefix() :: String.t()
+
+  def ref(%Tenant{ref: ref}), do: ref
 
   @doc """
   Returns true if the tenant already exists in the database.
@@ -134,79 +144,151 @@ defmodule EctoFoundationDB.Tenant do
   Returns true if the tenant exists in the database. False otherwise.
   """
   @spec exists?(Database.t(), id(), Options.t()) :: boolean()
-  def exists?(db, id, options), do: EctoAdapterStorage.tenant_exists?(db, id, options)
+  def exists?(db, id, options) do
+    case get(db, id, options) do
+      {:ok, _} -> true
+      {:error, :tenant_does_not_exist} -> false
+    end
+  end
 
   @spec db_open(Database.t(), id(), Options.t()) :: t()
-  def db_open(db, id, options), do: EctoAdapterStorage.open_tenant(db, id, options)
+  def db_open(db, id, options) do
+    tenant_name = get_tenant_name(id, options)
+    module = get_module(options)
+    %Tenant{ref: module.open(db, tenant_name), meta: module.new()}
+  end
 
   @spec list(Database.t(), Options.t()) :: [id()]
   def list(db, options) do
-    for {_k, json} <- EctoAdapterStorage.list_tenants(db, options) do
-      %{"name" => %{"printable" => name}} = Jason.decode!(json)
-      EctoAdapterStorage.tenant_name_to_id!(name, options)
+    start_name = get_tenant_name("", options)
+    end_name = :erlfdb_key.strinc(start_name)
+    module = get_module(options)
+    list = module.list(db, start_name, end_name, [])
+
+    for {_k, db_object} <- list do
+      name = module.get_printable_name(db_object)
+      tenant_name_to_id!(name, options)
     end
   end
 
   @spec create(Database.t(), id(), Options.t()) :: :ok
-  def create(db, id, options), do: EctoAdapterStorage.create_tenant(db, id, options)
+  def create(db, id, options) do
+    tenant_name = get_tenant_name(id, options)
+    get_module(options).create(db, tenant_name, options)
+  end
 
   @spec clear(Database.t(), id(), Options.t()) :: :ok
-  def clear(db, id, options), do: EctoAdapterStorage.clear_tenant(db, id, options)
+  def clear(db, id, options) do
+    tenant = db_open(db, id, options)
+
+    ranges = get_module(options).all_data_ranges()
+
+    :erlfdb.transactional(ref(tenant), fn tx ->
+      for {start_key, end_key} <- ranges, do: :erlfdb.clear_range(tx, start_key, end_key)
+    end)
+
+    :ok
+  end
 
   @spec empty(Database.t(), id(), Options.t()) :: :ok
-  def empty(db, id, options), do: EctoAdapterStorage.empty_tenant(db, id, options)
+  def empty(db, id, options) do
+    tenant = db_open(db, id, options)
+
+    {start_key, end_key} = Pack.adapter_repo_range(tenant)
+
+    :erlfdb.transactional(ref(tenant), fn tx ->
+      :erlfdb.clear_range(tx, start_key, end_key)
+    end)
+
+    :ok
+  end
 
   @spec delete(Database.t(), id(), Options.t()) :: :ok
-  def delete(db, id, options), do: EctoAdapterStorage.delete_tenant(db, id, options)
+  def delete(db, id, options) do
+    tenant_name = get_tenant_name(id, options)
+    get_module(options).delete(db, tenant_name, options)
+  end
 
-  def pack(_tenant, tuple) when is_tuple(tuple) do
+  def pack(tenant, tuple) when is_tuple(tuple) do
     tuple
-    |> add_tuple_head()
+    |> tenant.meta.__struct__.prepare_tuple(tenant.meta)
     |> :erlfdb_tuple.pack()
   end
 
-  def unpack(_tenant, tuple) do
+  def unpack(tenant, tuple) do
     tuple
     |> :erlfdb_tuple.unpack()
-    |> delete_tuple_head()
+    |> tenant.meta.__struct__.recover_tuple(tenant.meta)
   end
 
-  def range(_tenant, tuple) when is_tuple(tuple) do
+  def range(tenant, tuple) when is_tuple(tuple) do
     tuple
-    |> add_tuple_head()
+    |> tenant.meta.__struct__.prepare_tuple(tenant.meta)
     |> :erlfdb_tuple.range()
   end
 
-  def primary_mapper(_tenant) do
-    # mapper indexes are offset by the number of elements added by `add_tuple_head`
+  def primary_mapper(tenant) do
+    # mapper indexes are offset by the number of elements added by `prepare_tuple`
     fn offset ->
       # tuple elements: (head,) prefix, source, namespace, id, get_range
       for(i <- offset..(offset + 3), do: "{V[#{i}]}") ++ ["{...}"]
     end
-    |> add_tuple_head()
+    |> tenant.meta.__struct__.prepare_tuple(tenant.meta)
   end
 
   defp handle_open(repo, tenant, options) do
     Migrator.up(repo, tenant, options)
   end
 
-  defp add_tuple_head(tuple, head \\ "foo")
+  defp get_tenant_name(id, options) do
+    storage_id = Options.get(options, :storage_id)
+    storage_delimiter = Options.get(options, :storage_delimiter)
 
-  defp add_tuple_head(tuple, head) when is_tuple(tuple) do
-    :erlang.insert_element(1, tuple, head)
+    "#{storage_id}#{storage_delimiter}#{id}"
   end
 
-  defp add_tuple_head(list, head) when is_list(list) do
-    [head | list]
-    |> :erlang.list_to_tuple()
+  def get(db, id, options) do
+    tenant_name = get_tenant_name(id, options)
+    get_module(options).get(db, tenant_name)
   end
 
-  defp add_tuple_head(function, head) when is_function(function) do
-    function.(1)
-    |> add_tuple_head(head)
+  defp tenant_name_to_id!(tenant_name, options) do
+    prefix = get_tenant_name("", options)
+    len = String.length(prefix)
+    ^prefix = String.slice(tenant_name, 0, len)
+    String.slice(tenant_name, len, String.length(tenant_name) - len)
   end
 
-  defp delete_tuple_head(tuple) do
-    :erlang.delete_element(1, tuple)
+  defp get_module(options) do
+    case Options.get(options, :tenant_type) do
+      :managed ->
+        Managed
+
+      :layer ->
+        Layer
+    end
+  end
+
+  def assert_safe!(db, options) do
+    module = get_module(options)
+
+    if module == Layer and EctoAdapterStorage.was_up_with_managed_tenants?(db, options) do
+      raise Unsupported, """
+      Your FoundationDB database was previously created with `tenant_type: :managed`. The default
+      changed to `tenant_type: :layer` as of version 0.3, and it's not safe for us to start
+      EctoFoundationDB with `tenant_type: :layer` when it had previously been `:managed`. Please
+      change `tenant_type: :managed` or start with an empty database.
+      """
+    end
+
+    if module == Managed and EctoAdapterStorage.was_up_with_layer_tenants?(db, options) do
+      raise Unsupported, """
+      Your FoundationDB database was previously created with `tenant_type: :layer`, and you're now
+      requesting `tenant_type: :managed`. Changing the tenant_type is not supported. Please change
+      `tenant_type: :layer` or start with an empty database.
+      """
+    end
+
+    :ok
   end
 end

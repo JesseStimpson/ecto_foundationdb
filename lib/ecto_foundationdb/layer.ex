@@ -30,7 +30,6 @@ defmodule EctoFoundationDB.Layer do
   ```elixir
   defmodule EctoFoundationDB.Schemas.User do
     use Ecto.Schema
-    @schema_context usetenant: true
     schema "users" do
       field(:name, :string)
       field(:department, :string)
@@ -39,8 +38,8 @@ defmodule EctoFoundationDB.Layer do
   end
   ```
 
-  In this example, a User has an `:id` and a `:name`. Also notice that the User is defined with
-  `usetenant: true` which provides a scope under which the User lives. For example, a typical tenant
+  In this example, a User has an `:id` and a `:name`. Also remember that the User is defined within
+  a tenant which provides a scope under which the User lives. For example, a typical tenant
   would be the organization the User belongs to. Since the User is in this tenant, we do not need
   to provide an identifier for this organization on the User object itself.
 

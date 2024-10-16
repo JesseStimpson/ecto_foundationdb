@@ -21,7 +21,7 @@ defmodule EctoFoundationDB.Layer.Pack do
   @doc """
   ## Examples
 
-    iex> tenant = "@todo"
+    iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
     iex> EctoFoundationDB.Layer.Pack.adapter_repo_range(tenant)
     {"\\x01\\xFD\\x00\\x00", "\\x01\\xFD\\x00\\xFF"}
   """
@@ -32,7 +32,7 @@ defmodule EctoFoundationDB.Layer.Pack do
   @doc """
   ## Examples
 
-  iex> tenant = "@todo"
+  iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
   iex> EctoFoundationDB.Layer.Pack.adapter_source_range(tenant, "my-source")
   {"\\x01\\xFD\\x00\\x01my-source\\x00\\x00", "\\x01\\xFD\\x00\\x01my-source\\x00\\xFF"}
   """
@@ -58,7 +58,7 @@ defmodule EctoFoundationDB.Layer.Pack do
 
   ## Examples
 
-    iex> tenant = "@todo"
+    iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
     iex> EctoFoundationDB.Layer.Pack.primary_pack(tenant, "my-source", "my-id")
     iex> |> then(&EctoFoundationDB.Tenant.unpack(tenant, &1))
     {"\\xFD", "my-source", "d", <<131, 109, 0, 0, 0, 5, 109, 121, 45, 105, 100>>}
@@ -70,7 +70,7 @@ defmodule EctoFoundationDB.Layer.Pack do
   @doc """
   ## Examples
 
-    iex> tenant = "@todo"
+    iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
     iex> EctoFoundationDB.Layer.Pack.primary_range(tenant, "my-source")
     {"\\x01\\xFD\\0\\x01my-source\\0\\x01d\\0\\0", "\\x01\\xFD\\0\\x01my-source\\0\\x01d\\0\\xFF"}
   """
@@ -87,7 +87,7 @@ defmodule EctoFoundationDB.Layer.Pack do
 
   ## Examples
 
-    iex> tenant = "@todo"
+    iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
     iex> EctoFoundationDB.Layer.Pack.default_index_pack(tenant, "my-source", "my-index", 1, ["my-val"], "my-id")
     iex> |> then(&EctoFoundationDB.Tenant.unpack(tenant, &1))
     {"\\xFD", "my-source", "i", "my-index", 1, "my-val", <<131, 109, 0, 0, 0, 5, 109, 121, 45, 105, 100>>}
@@ -110,7 +110,7 @@ defmodule EctoFoundationDB.Layer.Pack do
 
   ## Examples
 
-    iex> tenant = "@todo"
+    iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
     iex> EctoFoundationDB.Layer.Pack.default_index_range(tenant, "my-source", "my-index", 1, ["my-val"])
     {"\\x01\\xFD\\0\\x01my-source\\0\\x01i\\0\\x01my-index\\0\\x15\\x01\\x01my-val\\0\\0", "\\x01\\xFD\\0\\x01my-source\\0\\x01i\\0\\x01my-index\\0\\x15\\x01\\x01my-val\\0\\xFF"}
   """
@@ -131,7 +131,8 @@ defmodule EctoFoundationDB.Layer.Pack do
     |> then(&Tenant.range(tenant, &1))
   end
 
-  defp prefix("\xFF" <> _), do: @migration_prefix
+  defp prefix("schema_migrations"), do: @migration_prefix
+  defp prefix("indexes"), do: @migration_prefix
   defp prefix(_), do: @adapter_prefix
 
   @doc """

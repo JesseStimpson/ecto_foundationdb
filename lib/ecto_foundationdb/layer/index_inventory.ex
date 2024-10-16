@@ -9,7 +9,7 @@ defmodule EctoFoundationDB.Layer.IndexInventory do
   alias EctoFoundationDB.Options
   alias EctoFoundationDB.QueryPlan
 
-  @index_inventory_source "\xFFindexes"
+  @index_inventory_source "indexes"
   @max_version_name "version"
   @idx_operation_failed {:erlfdb_error, 1020}
 
@@ -37,10 +37,10 @@ defmodule EctoFoundationDB.Layer.IndexInventory do
 
   ## Examples
 
-    iex> tenant = "@todo"
+    iex> tenant = %EctoFoundationDB.Tenant{meta: %EctoFoundationDB.Tenant.Managed{}}
     iex> {key, obj} = EctoFoundationDB.Layer.IndexInventory.new_index(tenant, "users", "users_name_index", [:name], [])
     iex> {EctoFoundationDB.Tenant.unpack(tenant, key), obj}
-    {{"\\xFE", "\\xFFindexes", "users", "users_name_index"}, [id: "users_name_index", indexer: EctoFoundationDB.Indexer.Default, source: "users", fields: [:name], options: []]}
+    {{"\\xFE", "indexes", "users", "users_name_index"}, [id: "users_name_index", indexer: EctoFoundationDB.Indexer.Default, source: "users", fields: [:name], options: []]}
 
   """
   def new_index(tenant, source, index_name, index_fields, options) do

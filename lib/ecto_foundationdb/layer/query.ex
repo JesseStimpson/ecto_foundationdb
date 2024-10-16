@@ -18,7 +18,7 @@ defmodule EctoFoundationDB.Layer.Query do
   @doc """
   Executes a query for retrieving data.
   """
-  def all(db_or_tenant, adapter_meta, plan, options \\ []) do
+  def all(tenant, adapter_meta, plan, options \\ []) do
     # All data retrieval comes through here. We use the Future module to
     # ensure that if the whole thing is executed inside a wrapping transaction,
     # the result is not awaited upon until requested. But if we're creating a new
@@ -27,9 +27,9 @@ defmodule EctoFoundationDB.Layer.Query do
     future = Future.before_transactional(plan.schema)
 
     {plan, future} =
-      IndexInventory.transactional(db_or_tenant, adapter_meta, plan.source, fn tx,
-                                                                               idxs,
-                                                                               _partial_idxs ->
+      IndexInventory.transactional(tenant, adapter_meta, plan.source, fn tx,
+                                                                         idxs,
+                                                                         _partial_idxs ->
         plan = make_range(idxs, plan, options)
         future = tx_get_range(tx, plan, future, options)
 
@@ -52,10 +52,8 @@ defmodule EctoFoundationDB.Layer.Query do
   @doc """
   Executes a query for updating data.
   """
-  def update(db_or_tenant, adapter_meta, plan) do
-    IndexInventory.transactional(db_or_tenant, adapter_meta, plan.source, fn tx,
-                                                                             idxs,
-                                                                             partial_idxs ->
+  def update(tenant, adapter_meta, plan) do
+    IndexInventory.transactional(tenant, adapter_meta, plan.source, fn tx, idxs, partial_idxs ->
       plan = make_range(idxs, plan, [])
       tx_update_range(tx, plan, idxs, partial_idxs)
     end)
@@ -65,18 +63,16 @@ defmodule EctoFoundationDB.Layer.Query do
   Executes a query for deleting data.
   """
   def delete(
-        db_or_tenant,
+        tenant,
         adapter_meta,
         plan = %QueryPlan{tenant: tenant, constraints: [%QueryPlan.None{}]}
       ) do
     # Special case, very efficient
-    Tx.transactional(db_or_tenant, &Tx.clear_all(tenant, &1, adapter_meta, plan.source))
+    Tx.transactional(tenant, &Tx.clear_all(tenant, &1, adapter_meta, plan.source))
   end
 
-  def delete(db_or_tenant, adapter_meta, plan) do
-    IndexInventory.transactional(db_or_tenant, adapter_meta, plan.source, fn tx,
-                                                                             idxs,
-                                                                             partial_idxs ->
+  def delete(tenant, adapter_meta, plan) do
+    IndexInventory.transactional(tenant, adapter_meta, plan.source, fn tx, idxs, partial_idxs ->
       plan = make_range(idxs, plan, [])
       tx_delete_range(tx, plan, idxs, partial_idxs)
     end)

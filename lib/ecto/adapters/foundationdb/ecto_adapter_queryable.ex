@@ -3,7 +3,6 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
   @behaviour Ecto.Adapter.Queryable
 
   alias EctoFoundationDB.Exception.IncorrectTenancy
-  alias EctoFoundationDB.Exception.Unsupported
   alias EctoFoundationDB.Future
   alias EctoFoundationDB.Layer.Fields
   alias EctoFoundationDB.Layer.Ordering
@@ -128,18 +127,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
        ) do
     context = Schema.get_context!(source, schema)
 
-    case Tx.safe?(tenant, Schema.get_option(context, :usetenant)) do
-      {false, :unused_tenant} ->
-        raise IncorrectTenancy, """
-        FoundatioDB Adapter is expecting the query for schema \
-        #{inspect(schema)} to specify no tentant in the prefix metadata, \
-        but a non-nil prefix was provided.
-
-        Add `usetenant: true` to your schema's `@schema_context`.
-
-        Alternatively, remove the `prefix: tenant` from your query.
-        """
-
+    case Tx.safe?(tenant) do
       {false, :missing_tenant} ->
         raise IncorrectTenancy, """
         FoundationDB Adapter is expecting the query for schema \
@@ -147,16 +135,10 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterQueryable do
         but a nil prefix was provided.
 
         Use `prefix: tenant` in your query.
-
-        Alternatively, remove `usetenant: true` from your schema's \
-        `@schema_context` if you do not want to use a tenant for this schema.
         """
 
-      {false, :tenant_only} ->
-        raise Unsupported, "Non-tenant transactions are not yet implemented."
-
-      true ->
-        {context, query}
+      {true, tenant} ->
+        {context, %Ecto.Query{query | prefix: tenant}}
     end
   end
 

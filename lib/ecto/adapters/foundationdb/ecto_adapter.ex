@@ -2,6 +2,9 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapter do
   @moduledoc false
   @behaviour Ecto.Adapter
 
+  alias Ecto.Adapters.FoundationDB.EctoAdapterStorage
+  alias EctoFoundationDB.Tenant
+
   @impl Ecto.Adapter
   defmacro __before_compile__(_env), do: :this_is_never_called
 
@@ -15,6 +18,9 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapter do
     stacktrace = Keyword.get(config, :stacktrace, nil)
     telemetry_prefix = Keyword.fetch!(config, :telemetry_prefix)
     telemetry = {config[:repo], log, telemetry_prefix ++ [:query]}
+
+    db = EctoAdapterStorage.open_db(config)
+    Tenant.assert_safe!(db, config)
 
     {:ok, Supervisor.child_spec(Ecto.Adapters.FoundationDB.Supervisor, []),
      %{telemetry: telemetry, stacktrace: stacktrace, opts: config}}

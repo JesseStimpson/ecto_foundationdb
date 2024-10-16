@@ -33,6 +33,8 @@ defmodule EctoFoundationDB.QueryPlan do
   end
 
   def get(tenant, source, schema, context, wheres, updates, params) do
+    if is_nil(tenant), do: raise("asda")
+
     constraints =
       case walk_ast(wheres, schema, params, []) do
         [] ->

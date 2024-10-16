@@ -81,13 +81,9 @@ defmodule Ecto.Adapters.FoundationDB do
 
   ### Creating a schema to be used in a tenant
 
-  Take note of the line `@schema_context usetenant: true`. This informs EctoFDB that this Schema is
-  always expected to be accessed via a Tenant.
-
   ```elixir
   defmodule User do
     use Ecto.Schema
-    @schema_context usetenant: true
     @primary_key {:id, :binary_id, autogenerate: true}
     schema "users" do
       field(:name, :string)
@@ -797,8 +793,8 @@ defmodule Ecto.Adapters.FoundationDB do
   For example, a transaction must complete
   [within 5 seconds](https://apple.github.io/foundationdb/developer-guide.html#long-running-transactions).
   """
-  @spec transactional(Database.t() | Tenant.t() | nil, function()) :: any()
-  def transactional(db_or_tenant, fun), do: Tx.transactional_external(db_or_tenant, fun)
+  @spec transactional(Tenant.t() | nil, function()) :: any()
+  def transactional(tenant, fun), do: Tx.transactional_external(tenant, fun)
 
   @impl Ecto.Adapter
   defmacro __before_compile__(_env) do

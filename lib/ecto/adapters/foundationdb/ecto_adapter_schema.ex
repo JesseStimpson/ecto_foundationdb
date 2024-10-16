@@ -3,7 +3,6 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterSchema do
   @behaviour Ecto.Adapter.Schema
 
   alias EctoFoundationDB.Exception.IncorrectTenancy
-  alias EctoFoundationDB.Exception.Unsupported
   alias EctoFoundationDB.Future
   alias EctoFoundationDB.Layer.Fields
   alias EctoFoundationDB.Layer.IndexInventory
@@ -148,45 +147,23 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterSchema do
     end)
   end
 
-  defp assert_tenancy!(schema_meta = %{source: source, schema: schema}) do
-    schema_meta =
-      %{schema: schema, prefix: tenant, context: context} =
-      Map.put(schema_meta, :context, Schema.get_context!(source, schema))
+  defp assert_tenancy!(schema_meta = %{source: source, schema: schema, prefix: tenant}) do
+    schema_meta = Map.put(schema_meta, :context, Schema.get_context!(source, schema))
 
-    case Tx.safe?(tenant, Schema.get_option(context, :usetenant)) do
-      {false, :unused_tenant} ->
-        raise IncorrectTenancy, """
-        FoundatioDB Adapter is expecting the struct for schema \
-        #{inspect(schema)} to specify no tentant in the prefix metadata, \
-        but a non-nil prefix was provided.
-
-        Add `usetenant: true` to your schema's `@schema_context`.
-
-        Also be sure to remove the option `prefix: tenant` on the call to your Repo.
-
-        Alternatively, remove the call to \
-        `Ecto.Adapters.FoundationDB.usetenant(struct, tenant)` before inserting.
-        """
-
+    case Tx.safe?(tenant) do
       {false, :missing_tenant} ->
         raise IncorrectTenancy, """
         FoundationDB Adapter is expecting the struct for schema \
         #{inspect(schema)} to include a tenant in the prefix metadata, \
         but a nil prefix was provided.
 
-        Call `Ecto.Adapters.FoundationDB.usetenant(struxt, tenant)` before inserting.
+        Call `Ecto.Adapters.FoundationDB.usetenant(struct, tenant)` before inserting.
 
         Or use the option `prefix: tenant` on the call to your Repo.
-
-        Alternatively, remove `usetenant: true` from your schema's \
-        `@schema_context` if you do not want to use a tenant for this schema.
         """
 
-      {false, :tenant_only} ->
-        raise Unsupported, "Non-tenant transactions are not yet implemented."
-
-      true ->
-        schema_meta
+      {true, tenant} ->
+        Map.put(schema_meta, :prefix, tenant)
     end
   end
 end
