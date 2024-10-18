@@ -94,6 +94,7 @@ defmodule EctoFoundationDBProgressiveJobTest do
   alias Ecto.Adapters.FoundationDB
 
   alias EctoFoundationDB.Layer.Pack
+  alias EctoFoundationDB.Tenant
 
   use Ecto.Integration.MigrationsCase
 
@@ -137,7 +138,8 @@ defmodule EctoFoundationDBProgressiveJobTest do
     tenant = context[:tenant]
 
     FoundationDB.transactional(tenant, fn tx ->
-      for i <- 1..@n_seed, do: :erlfdb.set(tx, Ecto.UUID.generate(), Pack.to_fdb_value(i))
+      key = Tenant.pack(tenant, {Ecto.UUID.generate()})
+      for i <- 1..@n_seed, do: :erlfdb.set(tx, key, Pack.to_fdb_value(i))
     end)
 
     assert [{:ok, [:done]}] == async_jobs(tenant, 1, @n_seed)
