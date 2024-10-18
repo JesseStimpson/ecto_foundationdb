@@ -16,8 +16,8 @@ defmodule EctoFoundationDB.Tenant do
   alias EctoFoundationDB.Migrator
   alias EctoFoundationDB.Options
   alias EctoFoundationDB.Tenant
-  alias EctoFoundationDB.Tenant.Managed
   alias EctoFoundationDB.Tenant.Layer
+  alias EctoFoundationDB.Tenant.Managed
 
   @type t() :: %Tenant{}
   @type meta() :: Managed.t() | Layer.t()
@@ -30,19 +30,19 @@ defmodule EctoFoundationDB.Tenant do
   Returns true if the tenant already exists in the database.
   """
   @spec exists?(Ecto.Repo.t(), id()) :: boolean()
-  def exists?(repo, id), do: exists?(FDB.db(repo), id, repo.config())
+  def exists?(repo, id) when byte_size(id) > 0, do: exists?(FDB.db(repo), id, repo.config())
 
   @doc """
   Create a tenant in the database.
   """
   @spec create(Ecto.Repo.t(), id()) :: :ok
-  def create(repo, id), do: create(FDB.db(repo), id, repo.config())
+  def create(repo, id) when byte_size(id) > 0, do: create(FDB.db(repo), id, repo.config())
 
   @doc """
   Clears data in a tenant and then deletes it. If the tenant doesn't exist, no-op.
   """
   @spec clear_delete!(Ecto.Repo.t(), id()) :: :ok
-  def clear_delete!(repo, id) do
+  def clear_delete!(repo, id) when byte_size(id) > 0 do
     options = repo.config()
     db = FDB.db(repo)
 
@@ -65,7 +65,7 @@ defmodule EctoFoundationDB.Tenant do
   indefinitely, with any number of database transactions issued upon them.
   """
   @spec open(Ecto.Repo.t(), id(), Options.t()) :: t()
-  def open(repo, id, options \\ []) do
+  def open(repo, id, options \\ []) when byte_size(id) > 0 do
     config = Keyword.merge(repo.config(), options)
     tenant = db_open(FDB.db(repo), id, config)
     handle_open(repo, tenant, config)
@@ -83,7 +83,7 @@ defmodule EctoFoundationDB.Tenant do
   indefinitely, with any number of database transactions issued upon them.
   """
   @spec open!(Ecto.Repo.t(), id(), Options.t()) :: t()
-  def open!(repo, id, options \\ []) do
+  def open!(repo, id, options \\ []) when byte_size(id) > 0 do
     config = Keyword.merge(repo.config(), options)
     tenant = db_open!(FDB.db(repo), id, config)
     handle_open(repo, tenant, config)
@@ -96,7 +96,7 @@ defmodule EctoFoundationDB.Tenant do
   but in production, this would be dangerous.
   """
   @spec open_empty!(Ecto.Repo.t(), id(), Options.t()) :: t()
-  def open_empty!(repo, id, options_in \\ []) do
+  def open_empty!(repo, id, options_in \\ []) when byte_size(id) > 0 do
     db = FDB.db(repo)
     options = Keyword.merge(repo.config(), options_in)
     :ok = ensure_created(db, id, options)
@@ -114,14 +114,14 @@ defmodule EctoFoundationDB.Tenant do
   Clear all data for the given tenant. This cannot be undone.
   """
   @spec clear(Ecto.Repo.t(), id()) :: :ok
-  def clear(repo, id), do: clear(FDB.db(repo), id, repo.config())
+  def clear(repo, id) when byte_size(id) > 0, do: clear(FDB.db(repo), id, repo.config())
 
   @doc """
   Deletes a tenant from the database permanently. The tenant must
   have no data.
   """
   @spec delete(Ecto.Repo.t(), id()) :: :ok
-  def delete(repo, id), do: delete(FDB.db(repo), id, repo.config())
+  def delete(repo, id) when byte_size(id) > 0, do: delete(FDB.db(repo), id, repo.config())
 
   @spec db_open!(Database.t(), id(), Options.t()) :: t()
   def db_open!(db, id, options) do

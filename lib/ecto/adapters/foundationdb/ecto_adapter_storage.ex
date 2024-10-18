@@ -71,19 +71,17 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterStorage do
   end
 
   defp managed_tenants_status(db, options) do
-    try do
-      Tenant.Managed.get(db, @storage_id, storage_options(options))
-    rescue
-      e in ErlangError ->
-        case e do
-          %ErlangError{original: {:erlfdb_error, 2136}} ->
-            {:error, :tenants_disabled}
-        end
-    end
+    Tenant.Managed.get(db, @storage_id, storage_options(options))
+  rescue
+    e in ErlangError ->
+      case e do
+        %ErlangError{original: {:erlfdb_error, 2136}} ->
+          {:error, :tenants_disabled}
+      end
   end
 
   def open_storage_tenant(db, options) do
-    Tenant.open(db, storage_options(options))
+    Tenant.open(db, @storage_id, storage_options(options))
   end
 
   defp storage_options(options), do: Keyword.merge(options, storage_options_override())

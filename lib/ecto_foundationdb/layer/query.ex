@@ -153,8 +153,7 @@ defmodule EctoFoundationDB.Layer.Query do
         pk_field,
         &1,
         updates,
-        idxs,
-        partial_idxs,
+        {idxs, partial_idxs},
         write_primary
       )
     )
@@ -167,7 +166,7 @@ defmodule EctoFoundationDB.Layer.Query do
     |> tx_get_range(plan, Future.new(plan.schema), [])
     |> Future.result()
     |> unpack_and_filter(plan)
-    |> Stream.map(&Tx.delete_data_object(plan.tenant, tx, plan.schema, &1, idxs, partial_idxs))
+    |> Stream.map(&Tx.delete_data_object(plan.tenant, tx, plan.schema, &1, {idxs, partial_idxs}))
     |> Enum.to_list()
     |> length()
   end

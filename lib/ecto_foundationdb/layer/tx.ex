@@ -104,7 +104,7 @@ defmodule EctoFoundationDB.Layer.Tx do
     end
   end
 
-  def insert_all(tenant, tx, {schema, source, context}, entries, idxs, partial_idxs, options) do
+  def insert_all(tenant, tx, {schema, source, context}, entries, {idxs, partial_idxs}, options) do
     entries =
       entries
       |> Enum.map(fn {{pk_field, pk}, data_object} ->
@@ -152,8 +152,7 @@ defmodule EctoFoundationDB.Layer.Tx do
         pk_field,
         pks,
         set_data,
-        idxs,
-        partial_idxs
+        {idxs, partial_idxs}
       ) do
     keys = for pk <- pks, do: Pack.primary_pack(tenant, source, pk)
 
@@ -175,8 +174,7 @@ defmodule EctoFoundationDB.Layer.Tx do
           pk_field,
           {fdb_key, data_object},
           [set: set_data],
-          idxs,
-          partial_idxs,
+          {idxs, partial_idxs},
           write_primary
         )
 
@@ -193,8 +191,7 @@ defmodule EctoFoundationDB.Layer.Tx do
         pk_field,
         {fdb_key, data_object},
         updates,
-        idxs,
-        partial_idxs,
+        {idxs, partial_idxs},
         write_primary
       ) do
     set_data = Keyword.get(updates, :set, [])
@@ -208,7 +205,7 @@ defmodule EctoFoundationDB.Layer.Tx do
     Indexer.update(tenant, tx, idxs, partial_idxs, schema, {fdb_key, data_object})
   end
 
-  def delete_pks(tenant, tx, {schema, source, _context}, pks, idxs, partial_idxs) do
+  def delete_pks(tenant, tx, {schema, source, _context}, pks, {idxs, partial_idxs}) do
     keys = for pk <- pks, do: Pack.primary_pack(tenant, source, pk)
 
     get_stage = &:erlfdb.get/2
@@ -223,8 +220,7 @@ defmodule EctoFoundationDB.Layer.Tx do
           tx,
           schema,
           {fdb_key, Pack.from_fdb_value(fdb_value)},
-          idxs,
-          partial_idxs
+          {idxs, partial_idxs}
         )
 
         acc + 1
@@ -233,7 +229,7 @@ defmodule EctoFoundationDB.Layer.Tx do
     pipeline(tenant, tx, keys, get_stage, 0, clear_stage)
   end
 
-  def delete_data_object(tenant, tx, schema, kv = {fdb_key, _}, idxs, partial_idxs) do
+  def delete_data_object(tenant, tx, schema, kv = {fdb_key, _}, {idxs, partial_idxs}) do
     :erlfdb.clear(tx, fdb_key)
 
     Indexer.clear(tenant, tx, idxs, partial_idxs, schema, kv)

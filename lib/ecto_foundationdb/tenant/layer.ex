@@ -1,4 +1,5 @@
 defmodule EctoFoundationDB.Tenant.Layer do
+  @moduledoc false
   defstruct [:ref, :node, :prefix]
 
   alias EctoFoundationDB.Options
@@ -16,18 +17,16 @@ defmodule EctoFoundationDB.Tenant.Layer do
   end
 
   def create(db, tenant_name, options) do
-    try do
-      :erlfdb_directory.create(db, tenant_node(db, options), tenant_name)
-      :ok
-    rescue
-      e in ErlangError ->
-        case e do
-          %ErlangError{
-            original: {:erlfdb_directory, {:create_error, :path_exists, _path}}
-          } ->
-            {:error, :tenant_already_exists}
-        end
-    end
+    :erlfdb_directory.create(db, tenant_node(db, options), tenant_name)
+    :ok
+  rescue
+    e in ErlangError ->
+      case e do
+        %ErlangError{
+          original: {:erlfdb_directory, {:create_error, :path_exists, _path}}
+        } ->
+          {:error, :tenant_already_exists}
+      end
   end
 
   def delete(db, "", options) do
@@ -48,17 +47,15 @@ defmodule EctoFoundationDB.Tenant.Layer do
   end
 
   def delete(db, tenant_name, options) do
-    try do
-      :erlfdb_directory.remove(db, tenant_node(db, options), tenant_name)
-    rescue
-      e in ErlangError ->
-        case e do
-          %ErlangError{
-            original: {:erlfdb_directory, {:delete_error, :path_missing, _path}}
-          } ->
-            :ok
-        end
-    end
+    :erlfdb_directory.remove(db, tenant_node(db, options), tenant_name)
+  rescue
+    e in ErlangError ->
+      case e do
+        %ErlangError{
+          original: {:erlfdb_directory, {:delete_error, :path_missing, _path}}
+        } ->
+          :ok
+      end
   end
 
   def get(db, "", options) do

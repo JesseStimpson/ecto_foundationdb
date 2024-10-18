@@ -63,8 +63,7 @@ defmodule EctoFoundationDB.Layer.TxInsert do
           pk_field,
           {fdb_key, existing_object},
           [set: data_object],
-          idxs,
-          partial_idxs,
+          {idxs, partial_idxs},
           write_primary
         )
 
@@ -80,8 +79,7 @@ defmodule EctoFoundationDB.Layer.TxInsert do
           pk_field,
           {fdb_key, existing_object},
           [set: Keyword.drop(data_object, fields)],
-          idxs,
-          partial_idxs,
+          {idxs, partial_idxs},
           write_primary
         )
 
@@ -97,8 +95,7 @@ defmodule EctoFoundationDB.Layer.TxInsert do
           pk_field,
           {fdb_key, existing_object},
           [set: Keyword.take(data_object, fields)],
-          idxs,
-          partial_idxs,
+          {idxs, partial_idxs},
           write_primary
         )
 

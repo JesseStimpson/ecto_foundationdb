@@ -1,4 +1,5 @@
 defmodule EctoFoundationDB.Tenant.Managed do
+  @moduledoc false
   defstruct []
 
   alias EctoFoundationDB.Options
@@ -27,29 +28,25 @@ defmodule EctoFoundationDB.Tenant.Managed do
   end
 
   def create(db, tenant_name, _options) do
-    try do
-      :erlfdb_tenant_management.create_tenant(db, tenant_name)
-    rescue
-      e in ErlangError ->
-        case e do
-          %ErlangError{original: {:erlfdb_error, 2132}} ->
-            {:error, :tenant_already_exists}
-        end
-    end
+    :erlfdb_tenant_management.create_tenant(db, tenant_name)
+  rescue
+    e in ErlangError ->
+      case e do
+        %ErlangError{original: {:erlfdb_error, 2132}} ->
+          {:error, :tenant_already_exists}
+      end
   end
 
   def delete(db, tenant_name, _options) do
-    try do
-      :erlfdb_tenant_management.delete_tenant(db, tenant_name)
-    rescue
-      e in ErlangError ->
-        case e do
-          %ErlangError{
-            original: {:erlfdb_directory, {:remove_error, :path_missing, [utf8: ^tenant_name]}}
-          } ->
-            {:error, :tenant_nonempty}
-        end
-    end
+    :erlfdb_tenant_management.delete_tenant(db, tenant_name)
+  rescue
+    e in ErlangError ->
+      case e do
+        %ErlangError{
+          original: {:erlfdb_directory, {:remove_error, :path_missing, [utf8: ^tenant_name]}}
+        } ->
+          {:error, :tenant_nonempty}
+      end
   end
 
   def get(db, tenant_name, _options) do
