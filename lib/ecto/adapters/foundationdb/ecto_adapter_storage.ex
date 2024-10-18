@@ -72,7 +72,7 @@ defmodule Ecto.Adapters.FoundationDB.EctoAdapterStorage do
 
   defp managed_tenants_status(db, options) do
     try do
-      Tenant.get(db, @storage_id, storage_options(options))
+      Tenant.Managed.get(db, @storage_id, storage_options(options))
     rescue
       e in ErlangError ->
         case e do

@@ -5,7 +5,7 @@ defmodule EctoFoundationDB.Tenant do
   so any application that uses the Ecto FoundationDB Adapter must use this module.
   """
 
-  defstruct [:ref, :meta]
+  defstruct [:txobj, :meta]
 
   alias Ecto.Adapters.FoundationDB, as: FDB
   alias Ecto.Adapters.FoundationDB.EctoAdapterStorage
@@ -24,7 +24,7 @@ defmodule EctoFoundationDB.Tenant do
   @type id() :: :erlfdb.tenant_name()
   @type prefix() :: String.t()
 
-  def ref(%Tenant{ref: ref}), do: ref
+  def txobj(%Tenant{txobj: txobj}), do: txobj
 
   @doc """
   Returns true if the tenant already exists in the database.
@@ -153,37 +153,40 @@ defmodule EctoFoundationDB.Tenant do
 
   @spec db_open(Database.t(), id(), Options.t()) :: t()
   def db_open(db, id, options) do
-    tenant_name = get_tenant_name(id, options)
     module = get_module(options)
-    %Tenant{ref: module.open(db, tenant_name), meta: module.new()}
+    tenant_name = module.get_name(id, options)
+    opened = module.open(db, tenant_name, options)
+    meta = module.make_meta(opened)
+
+    %Tenant{txobj: module.txobj(db, opened, meta), meta: meta}
   end
 
   @spec list(Database.t(), Options.t()) :: [id()]
   def list(db, options) do
-    start_name = get_tenant_name("", options)
-    end_name = :erlfdb_key.strinc(start_name)
     module = get_module(options)
-    list = module.list(db, start_name, end_name, [])
+    list = module.list(db, [])
 
     for {_k, db_object} <- list do
-      name = module.get_printable_name(db_object)
-      tenant_name_to_id!(name, options)
+      module.get_id(db_object, options)
     end
   end
 
   @spec create(Database.t(), id(), Options.t()) :: :ok
   def create(db, id, options) do
-    tenant_name = get_tenant_name(id, options)
-    get_module(options).create(db, tenant_name, options)
+    module = get_module(options)
+    tenant_name = module.get_name(id, options)
+
+    module.create(db, tenant_name, options)
   end
 
   @spec clear(Database.t(), id(), Options.t()) :: :ok
   def clear(db, id, options) do
     tenant = db_open(db, id, options)
 
-    ranges = get_module(options).all_data_ranges()
+    ranges =
+      get_module(options).all_data_ranges(tenant.meta)
 
-    :erlfdb.transactional(ref(tenant), fn tx ->
+    :erlfdb.transactional(txobj(tenant), fn tx ->
       for {start_key, end_key} <- ranges, do: :erlfdb.clear_range(tx, start_key, end_key)
     end)
 
@@ -194,69 +197,59 @@ defmodule EctoFoundationDB.Tenant do
   def empty(db, id, options) do
     tenant = db_open(db, id, options)
 
-    {start_key, end_key} = Pack.adapter_repo_range(tenant)
+    {start_key, end_key} =
+      Pack.adapter_repo_range(tenant)
 
-    :erlfdb.transactional(ref(tenant), fn tx ->
+    :erlfdb.transactional(txobj(tenant), fn tx ->
       :erlfdb.clear_range(tx, start_key, end_key)
     end)
 
     :ok
   end
 
-  @spec delete(Database.t(), id(), Options.t()) :: :ok
+  @spec delete(Database.t(), id(), Options.t()) :: :ok | {:error, atom()}
   def delete(db, id, options) do
-    tenant_name = get_tenant_name(id, options)
-    get_module(options).delete(db, tenant_name, options)
+    module = get_module(options)
+    tenant_name = module.get_name(id, options)
+
+    module.delete(db, tenant_name, options)
   end
 
   def pack(tenant, tuple) when is_tuple(tuple) do
     tuple
-    |> tenant.meta.__struct__.prepare_tuple(tenant.meta)
+    |> tenant.meta.__struct__.extend_tuple(tenant.meta)
     |> :erlfdb_tuple.pack()
   end
 
   def unpack(tenant, tuple) do
     tuple
     |> :erlfdb_tuple.unpack()
-    |> tenant.meta.__struct__.recover_tuple(tenant.meta)
+    |> tenant.meta.__struct__.extract_tuple(tenant.meta)
   end
 
   def range(tenant, tuple) when is_tuple(tuple) do
     tuple
-    |> tenant.meta.__struct__.prepare_tuple(tenant.meta)
+    |> tenant.meta.__struct__.extend_tuple(tenant.meta)
     |> :erlfdb_tuple.range()
   end
 
   def primary_mapper(tenant) do
-    # mapper indexes are offset by the number of elements added by `prepare_tuple`
+    # mapper indexes are offset by the number of elements added by `extend_tuple`
     fn offset ->
       # tuple elements: (head,) prefix, source, namespace, id, get_range
       for(i <- offset..(offset + 3), do: "{V[#{i}]}") ++ ["{...}"]
     end
-    |> tenant.meta.__struct__.prepare_tuple(tenant.meta)
+    |> tenant.meta.__struct__.extend_tuple(tenant.meta)
   end
 
   defp handle_open(repo, tenant, options) do
     Migrator.up(repo, tenant, options)
   end
 
-  defp get_tenant_name(id, options) do
-    storage_id = Options.get(options, :storage_id)
-    storage_delimiter = Options.get(options, :storage_delimiter)
-
-    "#{storage_id}#{storage_delimiter}#{id}"
-  end
-
   def get(db, id, options) do
-    tenant_name = get_tenant_name(id, options)
-    get_module(options).get(db, tenant_name)
-  end
-
-  defp tenant_name_to_id!(tenant_name, options) do
-    prefix = get_tenant_name("", options)
-    len = String.length(prefix)
-    ^prefix = String.slice(tenant_name, 0, len)
-    String.slice(tenant_name, len, String.length(tenant_name) - len)
+    module = get_module(options)
+    tenant_name = module.get_name(id, options)
+    module.get(db, tenant_name, options)
   end
 
   defp get_module(options) do

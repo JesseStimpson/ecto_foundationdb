@@ -27,7 +27,7 @@ defmodule EctoFoundationDB.Options do
 
   def get(options, :tenant_type),
     # @todo
-    do: Keyword.get(options, :tenant_type, :managed)
+    do: Keyword.get(options, :tenant_type, :layer)
 
   def get(options, :cluster_file), do: Keyword.get(options, :cluster_file, "")
 

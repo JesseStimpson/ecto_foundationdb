@@ -43,7 +43,7 @@ defmodule EctoFoundationDB.Layer.Tx do
     nil = Process.get(@tx)
 
     :erlfdb.transactional(
-      Tenant.ref(tenant),
+      Tenant.txobj(tenant),
       fn tx ->
         Process.put(@tenant, tenant)
         Process.put(@tx, tx)
@@ -79,7 +79,7 @@ defmodule EctoFoundationDB.Layer.Tx do
         try do
           Process.put(@tenant, context)
 
-          :erlfdb.transactional(Tenant.ref(context), fn tx ->
+          :erlfdb.transactional(Tenant.txobj(context), fn tx ->
             Process.put(@tx, tx)
             fun.(tx)
           end)
