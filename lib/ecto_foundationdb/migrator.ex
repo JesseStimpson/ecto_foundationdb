@@ -36,6 +36,7 @@ defmodule EctoFoundationDB.Migrator do
   def up_all(repo, options \\ []) do
     options = Keyword.merge(repo.config(), options)
     db = FoundationDB.db(repo)
+
     ids = Tenant.list(db, options)
 
     up_fun = fn id ->

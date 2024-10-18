@@ -70,7 +70,7 @@ defmodule EctoFoundationDB.Tenant.Managed do
     [{"", <<0xFF>>}]
   end
 
-  def get_id(json, options) do
+  def get_id({_key, json}, options) do
     %{"name" => %{"printable" => name}} = Jason.decode!(json)
     tenant_name_to_id!(name, options)
   end

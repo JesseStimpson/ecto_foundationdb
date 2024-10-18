@@ -164,9 +164,10 @@ defmodule EctoFoundationDB.Tenant do
   @spec list(Database.t(), Options.t()) :: [id()]
   def list(db, options) do
     module = get_module(options)
-    list = module.list(db, [])
 
-    for {_k, db_object} <- list do
+    list = module.list(db, options)
+
+    for db_object <- list do
       module.get_id(db_object, options)
     end
   end

@@ -4,18 +4,22 @@ defmodule EctoFoundationDBProgressiveJobTest.TestJob do
 
   alias EctoFoundationDB.Layer.Pack
   alias EctoFoundationDB.ProgressiveJob
+  alias EctoFoundationDB.Tenant
 
   @behaviour EctoFoundationDB.ProgressiveJob
 
-  @done_key "test_job_done"
-  @claim_key "test_job"
   @limit 100
+
+  defp done_key(tenant), do: Tenant.pack(tenant, {"test_job_done"})
+  defp claim_key(tenant), do: Tenant.pack(tenant, {"test_job"})
+  defp range(tenant), do: Tenant.range(tenant, {"test_"})
 
   def reset(tenant) do
     FoundationDB.transactional(tenant, fn tx ->
-      :erlfdb.clear_range(tx, "test_", "test~")
-      :erlfdb.clear(tx, @done_key)
-      :erlfdb.clear(tx, @claim_key)
+      {sk, ek} = range(tenant)
+      :erlfdb.clear_range(tx, sk, ek)
+      :erlfdb.clear(tx, done_key(tenant))
+      :erlfdb.clear(tx, claim_key(tenant))
     end)
   end
 
@@ -33,16 +37,17 @@ defmodule EctoFoundationDBProgressiveJobTest.TestJob do
   end
 
   @impl true
-  def init(_tenant, args) do
-    state = args |> Map.put(:count, 0)
-    {:ok, [@claim_key], {"", "\xFF"}, state}
+  def init(tenant, args) do
+    state = args |> Map.put(:count, 0) |> Map.put(:tenant, tenant)
+    {sk, ek} = Tenant.range(tenant, {})
+    {:ok, [claim_key(tenant)], {sk, ek}, state}
   end
 
   @impl true
   def done?(state, tx) do
     val =
       tx
-      |> :erlfdb.get(@done_key)
+      |> :erlfdb.get(done_key(state.tenant))
       |> :erlfdb.wait()
 
     {val != :not_found, state}
@@ -62,9 +67,9 @@ defmodule EctoFoundationDBProgressiveJobTest.TestJob do
 
     emit =
       if length(kvs) < @limit do
-        # raises exception if the key already exists, similiar to an `Ecto.Repo` insert
-        :not_found = :erlfdb.wait(:erlfdb.get(tx, @done_key))
-        :erlfdb.set(tx, @done_key, "done")
+        # raises exception if the key already exists, similar to an `Ecto.Repo` insert
+        :not_found = :erlfdb.wait(:erlfdb.get(tx, done_key(state.tenant)))
+        :erlfdb.set(tx, done_key(state.tenant), "done")
         [:done]
       else
         []

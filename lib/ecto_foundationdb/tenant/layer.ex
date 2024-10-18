@@ -96,7 +96,7 @@ defmodule EctoFoundationDB.Tenant.Layer do
     ]
   end
 
-  def get_id(db_object, _options), do: for({{:utf8, id}, _node} <- db_object, do: id)
+  def get_id({{:utf8, id}, _node}, _options), do: id
 
   def extend_tuple(x, meta), do: add_tuple_head(x, meta.prefix)
 
