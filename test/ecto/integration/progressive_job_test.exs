@@ -63,7 +63,9 @@ defmodule EctoFoundationDBProgressiveJobTest.TestJob do
       |> :erlfdb.wait()
 
     # Pretend that we're writing to a bunch of keys, as we would be doing for index creation
-    Enum.each(kvs, fn {k, _} -> :erlfdb.add_write_conflict_key(tx, "test_" <> k) end)
+    Enum.each(kvs, fn {k, _} ->
+      :erlfdb.add_write_conflict_key(tx, Tenant.pack(state.tenant, {"test_" <> k}))
+    end)
 
     emit =
       if length(kvs) < @limit do
